@@ -1,5 +1,10 @@
 ---
-title: "test"
+title: "Mathis Gheno"
+output: 
+  html_document:
+   number_sections: false
+   highlight: tango
+   css: style.css
 ---
 
 This is a Quarto website.
