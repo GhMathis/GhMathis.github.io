@@ -2,12 +2,15 @@ name: "Mathis Gheno"
 
 output_dir: "."
 
-navbar:
-  left:
-    - href: index.qmd
-      text: Home
-    - href: about.qmd
-      text: about
+project:
+  type: website
+website:
+  navbar:
+    left:
+      - href: index.qmd
+        text: Home
+      - href: about.qmd
+        text: about
 
 output:
   html_document:
