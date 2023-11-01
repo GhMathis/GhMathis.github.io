@@ -1,21 +1,21 @@
-name: "Mathis Gheno"
-
-output_dir: "."
-
 project:
   type: website
+
 website:
+  title: "test"
   navbar:
     left:
       - href: index.qmd
         text: Home
-      - href: about.qmd
-        text: about
+      - about.qmd
 
-output:
-  html_document:
+format:
+  html:
     theme: cosmo
     css: styles.css
+    toc: true
+
+editor: visual
 
 
 
