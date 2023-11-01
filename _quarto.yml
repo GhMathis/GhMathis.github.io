@@ -1,0 +1,18 @@
+name: "Mathis Gheno"
+title: "test"
+
+output_dir: "."
+
+navbar:
+  left:
+    - href: index.qmd
+      text: Home
+    - about.qmd
+
+output:
+  html_document:
+    theme: cosmo
+    css: styles.css
+    toc: true
+
+
