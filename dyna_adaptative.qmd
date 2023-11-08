@@ -8,19 +8,23 @@ editor_options:
 ---
 
 ```{r}
+#| warning: false
+#| message: false
+
 library(tidyverse)
 library(deSolve)
 library(doParallel) # for parallel processing
 library(parallel) # detect core
 library(rgl)
+library(RColorBrewer)
 library(latex2exp)
 main_theme = theme_bw()+
   theme(line = element_blank(), 
         axis.line = element_line(colour = "black"),
         panel.border = element_blank(),
         axis.ticks =  element_line(colour = "black"),
-        axis.text.x = element_text(colour = "black", size=22),
-        axis.text.y = element_text(colour = "black", size=22),
+        axis.text.x = element_text(colour = "black", size=20),
+        axis.text.y = element_text(colour = "black", size=20),
         legend.title = element_text(colour = "black", size=20),
         legend.title.align=0.5,
         legend.text = element_text(colour = "black", size=18),
@@ -30,19 +34,25 @@ main_theme = theme_bw()+
 
 # Introdution
 
-Nous cherchons dans un première temps a simulé évolution de 2 phénotype en compétition. Puis dans un second temps nous présenterons le même modéles mais étendus a N phénotypes.
+Nous cherchons dans un premier temps à simuler l'évolution de 2 phénotypes en compétition. Puis dans un second temps, nous présenterons le même modèle, mais étendus à N phénotypes.
 
-Ce modelés de dynamique adaptative décris une évolution fréquence dépendante de la composition phénotypique d'une population.
+Ce modèle de dynamique adaptative décrit une évolution fréquence dépendante de la composition phénotypique d'une population.
 
 # Description du modèle
 
-Chaque phénotype peut vairé le long d'un gradient de trait possible. Chaque phénotype ne peut produire que des individus du même phénotype (hors mutation). On se place dans la situation d'une population résidente ayant le même phénotype (population *monomorphe*). Dans cette population on suppose l'arrivé d'un mutant. L'objectif est donc de chercher si la population mutante va se faire exclure, si elle va exclure la résidente ou si les deux vont coexister.
+Chaque phénotype peut varier le long d'un gradient de trait possible. Chaque phénotype ne peut produire que des individus du même phénotype (hors mutation). On se place dans la situation d'une population résidente ayant le même phénotype (population *monomorphe*). Dans cette population, on suppose l'arrivé d'un mutant. L'objectif est donc de chercher si la population mutante va se faire exclure, si elle va exclure la résidente ou si les deux vont coexister.
 
 # Cas d'un modéle a 2 phénotypes
 
-On a le système suivant qui décrit la dynamique des deux phénotypes \$\$ \frac{dn_1}{dt} = rn_1(1-\frac{a(x_1,x_1)n_1+a(x_1,x_2)n_2}{K(x_1)} )\\ \frac{dn_2}{dt} = rn_1(1-\frac{a(x_2,x_2)n_21+a(x_1,x_2)n_1}{K(x_2)})\\
+On a le système suivant qui décrit la dynamique des deux phénotypes 
 
-\$\$
+$$ 
+\begin{align}
+\frac{dn_1}{dt} &= rn_1 \left(1-\frac{a(x_1,x_1)n_1+a(x_1,x_2)n_2}{K(x_1)} \right)\\
+\frac{dn_2}{dt} &= rn_1 \left(1-\frac{a(x_2,x_2)n_21+a(x_1,x_2)n_1}{K(x_2)} \right)\\
+\end{align}
+$$
+
 
 $$
 \begin{align}
@@ -53,7 +63,9 @@ $$
 
 avec $a$ et $K$ décrivant respectivement l'intensité de la compétition entre deux traits ($0<a(x,y)<1$ et la disponibilité de la ressource pour un trait donnée.
 
-Nous allons donc commencé par crée les fonction $a$ et $K$. Nous pour cette exemple les valeurs suivant : $$
+Nous allons donc commencé par crée les fonction $a$ et $K$. Nous pour cette exemple les valeurs suivant : 
+
+$$
 K_0 = 1 \ ; \ \lambda = 0.5 ; \ x_0 = 1 \\
 \sigma = 1
 $$
@@ -64,24 +76,27 @@ K = function(x){(1-0.5*(x - 1)^2)}
 a = function(x,y,sigma = 1){exp(-1/(2*sigma)*(x-y)^2)}
 ```
 
-Avec quelques calculs d'équilibre il viens: $$
-s(x,y) = r\cdot(1-a(x,y)\cdot\frac{K(y)}{K(x)})
-$$ C'est cette fonction que l'on appel fitness qui va décrire la stabilité des phénotype. Si $s(x,y)<0$ le mutant ne peut pas envahir, mais si $s(x,y)>0$ alors ce dernier peut subsisté.
+Avec quelques calculs d'équilibres il viens: 
+
+$$
+s(x,y) = r\cdot \left(1-a(x,y)\cdot\frac{K(y)}{K(x)}\right)
+$$ 
+
+C'est cette fonction que l'on appel fitness qui va décrire la stabilité des phénotype. Si $s(x,y)<0$ le mutant ne peut pas envahir, mais si $s(x,y)>0$ alors ce dernier peu envahir.
 
 ```{r}
 s = function(x,y) {1 - a(x,y) *(K(y) / K(x))}
 
 ```
 
-Nous avons maintenant tous les outils pour étudier le comportement de ce modéle.
-
-On commence par crée un gradient de trait possible.
+Nous avons maintenant tous les outils pour étudier le comportement de ce modèle.
+On commence par créer un gradient de traits possible.
 
 ```{r}
 X = seq(0.01,1.99,length.out = 100)
 ```
 
-On peut représenté $K$ et $a$ pour chaque valeur de traits possible en fixant le trait de la population y sur certaine valeur.
+On peut représenter $K$ et $a$ pour chaque valeur de traits possible en fixant le trait de la population y sur certaines valeurs.
 
 ```{r}
 plot(a(X,1)~X, type = "l",xlab = "Traits" , ylab = "Ressource", lwd = 2)
@@ -96,7 +111,7 @@ legend("topright",legend = c("a","K"), col = c("black","red"), lwd = 2)
 
 ## Representation de la fitness
 
-Création de la fonction qui calcule chaque pour chaque valeurs de traits de x et y la fitness des deux phénotype. Un argument sigma est ajouté pour observé la variation de fitness pour différentes paramétres de la fonction d'inteesité de compétition.
+Création de la fonction qui calcule pour chaque valeur de traits de x et y la fitness des deux phénotypes. Un argument sigma est ajouté pour observer la variation de fitness pour différents paramètres de la fonction d'intensité de compétition.
 
 ```{r}
 fitness.compute = function(X,sigma){
@@ -134,17 +149,20 @@ fitness_output$category  <- ifelse(fitness_output$s >= 0, "Positive", "Negative"
 ### Pour different sigma
 
 ```{r}
+col_red = brewer.pal(3,"Set1")[1]
+col_green = brewer.pal(3,"Set1")[3]
 ggplot(fitness_output)+
-  geom_raster(aes(x, y,  fill=category))+
-  facet_wrap(~sigma) +
-  scale_fill_manual(values = c("Negative" = "red", "Positive" = "blue"))+
-  main_theme
+  geom_raster(aes(x, y,  fill=category), alpha =0.75)+
+  facet_wrap(~sigma, labeller = labeller(sigma = label_both)) +
+  scale_fill_manual(values = c("Negative" = col_red, "Positive" = col_green))+
+  main_theme+
+  theme(axis.text.x = element_text(angle  = 45, hjust=1))
 ```
 
 ### En 3 dimentions
 
 ```{r}
-#| include: false
+#| output: false
 
 
 grid <- expand.grid(X, X)
@@ -152,17 +170,17 @@ grid <- expand.grid(X, X)
 # Calculate the function values
 z <- with(grid, s(Var1, Var2))
 # Define the colors based on the sign of z
-colors <- ifelse(z  > 0, "blue", "red")
+colors <- ifelse(z  > 0, col_green, col_red)
 colors
 # Create the 3D surface plot
 rgl.open()
 plot3d(grid$Var1, grid$Var2, z, col = colors, type = "p", size = 0.5,
-       xlab = "x", ylab = "y", zlab = "f(x, y)",
+       xlab = "x", ylab = "y", zlab = "s(x, y)",
        colkey = list(length = 0.5, width = 0.1))
 
 # Add a color legend
 legend3d("topright", legend = c("Positive", "Negative"),
-         pch = 15, col = c("blue", "red"))
+         pch = 15, col = c(col_green, col_red))
 
 rglWidgetHTML <- rglwidget()
 
@@ -208,7 +226,7 @@ GLV = function(t, Ni, params){
 
 ## Parameters pour le GLV
 
-Pour 50 phénotype en compétition et avec $\sigma = 0.2$. On devrais obtenir un équilibre
+Pour 200 phénotypes en compétition et avec $\sigma = 0.2$. On devrait obtenir un équilibre .
 
 ```{r}
 N = 200 # Nombre de phénotype
@@ -288,9 +306,9 @@ Cette fois-ci seulement 1 phénotype subsiste.
 
 ### Mutation
 
-On ajoute maintenant la mutation. Pour cela on va considéré un temps évolutif, différent du temps de la dynamique. Ce temp évolutif est discret, une unité de temp évolutif correspond a une dynamique complété. On commence la simulation avec un seul phénotype. A chaque pas de temps évolutif une partie de la population du phénotype peut muté. Cella ce traduit par un transfert d'une la population vers une valeur de trait légèrement plus ou légèrement moins élever.A la fin de chaque dynamique on récupéré les valeurs abondance de l'ensemble des trait présent, ces valeur sont le récapitulatif de chaque pas de temp évolutif et sont aussi les valeurs initial de la dynamique du prochain temps évolutif.
+On ajoute maintenant la mutation. Pour cela, on va considérer un temps évolutif, différent du temps de la dynamique. Ce temps évolutif est discret, une unité de temps évolutif correspond à une dynamique complète. On commence la simulation avec un seul phénotype. À chaque pas de temps évolutif, une partie de la population du phénotype peut muter. Cella ce traduit par un transfert d'une la population vers une valeur de trait légèrement plus ou légèrement moins élever. À la fin de chaque dynamique, on récupère les valeurs abondance de l'ensemble des traits présent, ces valeurs sont le récapitulatif de chaque pas de temps évolutif et sont aussi les valeurs initiales de la dynamique du prochain temps évolutif.
 
-Fonction de dynamique adatpative avec mutation
+Fonction de dynamique adaptative avec mutation
 
 ```{r}
 
@@ -307,7 +325,7 @@ mutation.dyna.adapt = function(ini = 1, sigma){
   K = matrix(NA, nrow = length(X), ncol = length(X))
   A = matrix(NA, nrow = length(X), ncol = length(X))
   
-  T_evolutif = 250 #nbr de pas de temps évolutifs
+  T_evolutif = 1000 #nbr de pas de temps évolutifs
 
   ### 
   for(i in 1:length(X)){
@@ -338,13 +356,13 @@ mutation.dyna.adapt = function(ini = 1, sigma){
   last_out[N] =F
   fist_out[1] = F 
   
-  # Initialisation de la matrice prenant les valeurs de traits possibles pour chaque temps evolutif
+  # Initialisation de la matrice prenant les valeurs de traits possibles pour chaque temps évolutif
   dyna_mutation = matrix(0, ncol = N, nrow = T_evolutif)
   dyna_mutation[1,] = N0
   T_evo = 1
   for(T_evo in 1:(T_evolutif-1)){
     dyna_glv = ode(y = dyna_mutation[T_evo,], times = t, func = GLV, params, method = "euler")
-    dyna_glv = dyna_glv[,2:(N+1)] #retrait de la colonne t
+    dyna_glv = dyna_glv[,2:(N+1)] #retrait de la colonne t (temps)
     dyna_mutation[T_evo+1,] = dyna_glv[nrow(dyna_glv),] # stockage du dernier pas de temps
     
     pres = dyna_glv[nrow(dyna_glv),] !=0 #vérification de la présence ou non de chaque traits.
@@ -354,7 +372,7 @@ mutation.dyna.adapt = function(ini = 1, sigma){
       
       # Mutation du trait vers la "droite"
       mut = rbinom(N,1,0.5)
-      ID = which(mut & pres & last_out) # filtre permettant validé la mutation ou non suivant si la mutation effectivement eu lieu (mut), la présence du trait (pres), et de la possibilité de la mutation (last_out ou fist_out suivant si la mutation est à "droite" ou à "gauche" ) (les trait 0 et 1.99, ne peuvent pas muté à -0.01 ou 2)
+      ID = which(mut & pres & last_out) # filtre permettant valider la mutation ou non suivant si la mutation a effectivement eu lieu (mut), la présence du trait (pres), et de la possibilité de la mutation (last_out ou fist_out suivant si la mutation est à "droite" ou à "gauche" ) (les trait 0 et 1.99, ne peuvent pas muté à -0.01 ou 2)
       
       # Mutation de population de 5%
       dyna_mutation[T_evo+1, ID] = dyna_mutation[T_evo+1, ID] -dyna_mutation[T_evo+1, ID] * 0.05
@@ -382,7 +400,9 @@ mutation.dyna.adapt = function(ini = 1, sigma){
 }
 ```
 
-On lance les simulations pour différentes valeur de sigma, avec seulement 1 phénotype a l'état initial
+On lance les simulations pour différentes valeurs de sigma, avec seulement 1 phénotype à l'état initial.
+
+Parallélisation de 3 simulation pour différente valeurs de sigma :
 
 ```{r}
 
@@ -397,11 +417,12 @@ dyna_mutation_long = foreach(sig = c(0.2,0.6,1),.combine = rbind, .verbose = T) 
 # }
 ```
 
+
 ```{r}
 
 ggplot(dyna_mutation_long)+
   geom_raster(aes(trait, T_evolutif,  fill=dens))+
-  facet_wrap(~sigma, labeller = labeller(sigma = c("sig",  label_value)))+
+  facet_wrap(~sigma, labeller = labeller(sigma = label_both))+
   scale_fill_gradient2(low = "white" ,
   high = "black")+
   labs(x = "Temps evolitif", y = "Traits")+
@@ -409,27 +430,32 @@ ggplot(dyna_mutation_long)+
   theme(line = element_blank(), 
         axis.line = element_line(colour = "black"),
         axis.ticks =  element_line(colour = "black"),
-        axis.text.x = element_text(colour = "black", size=22),
-        axis.text.y = element_text(colour = "black", size=22),
+        axis.text.x = element_text(colour = "black", size=20),
+        axis.text.y = element_text(colour = "black", size=20),
         legend.title = element_text(colour = "black", size=20),
         legend.title.align=0.5,
         legend.text = element_text(colour = "black", size=18),
         axis.title=element_text(size=28),
-        strip.background = element_rect(fill="white"))
+        strip.background = element_rect(fill="white"))+
+  theme(axis.text.x = element_text(angle  = 45, hjust=1))
 
-TeX(r'($\sigma = $)')
 ```
+
+Pour des valeurs de $\sigma$ faible, plusieurs phénotype peuvent cohabité. Mais lorsque l'intensité de compétition augment, cette cohabitation devient impossible.
+
 
 Simulations avec 2 phénotype à l'état initial pour 3 valeur de sigma
 
 ```{r}
+#| output: false
+
 dyna_mutation_long2 = foreach( sig = c(0.2,0.6,1),.combine = rbind, .verbose = T) %dopar%{mutation.dyna.adapt(ini = 2, sigma = sig)}
 ```
 
 ```{r}
 ggplot(dyna_mutation_long2)+
   geom_raster(aes(trait, T_evolutif,  fill=dens))+
-  facet_wrap(~sigma)+
+  facet_wrap(~sigma, labeller = labeller(sigma = label_both))+
   scale_fill_gradient2(low = "white" ,
   high = "black")+
   labs(x = "Temps evolitif", y = "Traits")+
@@ -438,12 +464,15 @@ ggplot(dyna_mutation_long2)+
         axis.line = element_line(colour = "black"),
         
         axis.ticks =  element_line(colour = "black"),
-        axis.text.x = element_text(colour = "black", size=22),
-        axis.text.y = element_text(colour = "black", size=22),
+        axis.text.x = element_text(colour = "black", size=20),
+        axis.text.y = element_text(colour = "black", size=20),
         legend.title = element_text(colour = "black", size=20),
         legend.title.align=0.5,
         legend.text = element_text(colour = "black", size=18),
         axis.title=element_text(size=28),
-        strip.background = element_rect(fill="white"))
+        strip.background = element_rect(fill="white"))+
+  theme(axis.text.x = element_text(angle  = 45, hjust=1))
 
 ```
+
+Lorsque l'on met deux phénotypes en compétition, les valeurs de trait stable sont aussi atteins, comme dans le premier cas de figure à un phénotype.

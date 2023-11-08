@@ -9,6 +9,6 @@ output:
 
 
 ##Sommaire
-[Dynamique adaptative](dyna_adaptative.html)
+[Dynamique adaptative](dyna_adaptative.qmd)
 
 
