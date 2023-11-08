@@ -3,12 +3,14 @@ project:
   output-dir: .
   
 website:
-  title: "test"
+  title: "My website"
   navbar:
     left:
       - href: index.html
         text: Home
+        
       - href: about.html
+      
       - href: dyna_adaptative.html
         text: Dynamique adaptative
 

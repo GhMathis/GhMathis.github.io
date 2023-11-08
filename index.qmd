@@ -9,6 +9,6 @@ output:
 
 
 ##Sommaire
-[Dynamique adaptative](dyna_render.qmd)
+[Dynamique adaptative](dyna_adaptativer.qmd)
 
 
