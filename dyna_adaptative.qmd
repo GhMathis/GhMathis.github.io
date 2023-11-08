@@ -1,0 +1,449 @@
+---
+title: "GLV Dynamique adaptative"
+author: "Mathis Gheno"
+format: html
+editor: visual
+editor_options: 
+  chunk_output_type: inline
+---
+
+```{r}
+library(tidyverse)
+library(deSolve)
+library(doParallel) # for parallel processing
+library(parallel) # detect core
+library(rgl)
+library(latex2exp)
+main_theme = theme_bw()+
+  theme(line = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        panel.border = element_blank(),
+        axis.ticks =  element_line(colour = "black"),
+        axis.text.x = element_text(colour = "black", size=22),
+        axis.text.y = element_text(colour = "black", size=22),
+        legend.title = element_text(colour = "black", size=20),
+        legend.title.align=0.5,
+        legend.text = element_text(colour = "black", size=18),
+        axis.title=element_text(size=28),
+        strip.background = element_rect(fill="white"))
+```
+
+# Introdution
+
+Nous cherchons dans un première temps a simulé évolution de 2 phénotype en compétition. Puis dans un second temps nous présenterons le même modéles mais étendus a N phénotypes.
+
+Ce modelés de dynamique adaptative décris une évolution fréquence dépendante de la composition phénotypique d'une population.
+
+# Description du modèle
+
+Chaque phénotype peut vairé le long d'un gradient de trait possible. Chaque phénotype ne peut produire que des individus du même phénotype (hors mutation). On se place dans la situation d'une population résidente ayant le même phénotype (population *monomorphe*). Dans cette population on suppose l'arrivé d'un mutant. L'objectif est donc de chercher si la population mutante va se faire exclure, si elle va exclure la résidente ou si les deux vont coexister.
+
+# Cas d'un modéle a 2 phénotypes
+
+On a le système suivant qui décrit la dynamique des deux phénotypes \$\$ \frac{dn_1}{dt} = rn_1(1-\frac{a(x_1,x_1)n_1+a(x_1,x_2)n_2}{K(x_1)} )\\ \frac{dn_2}{dt} = rn_1(1-\frac{a(x_2,x_2)n_21+a(x_1,x_2)n_1}{K(x_2)})\\
+
+\$\$
+
+$$
+\begin{align}
+&a(x,y) = e^{\frac{-(x-y)^2}{2\sigma^2}}\\
+&K(x) = K_0-\lambda*(x - x0)^2
+\end{align}
+$$
+
+avec $a$ et $K$ décrivant respectivement l'intensité de la compétition entre deux traits ($0<a(x,y)<1$ et la disponibilité de la ressource pour un trait donnée.
+
+Nous allons donc commencé par crée les fonction $a$ et $K$. Nous pour cette exemple les valeurs suivant : $$
+K_0 = 1 \ ; \ \lambda = 0.5 ; \ x_0 = 1 \\
+\sigma = 1
+$$
+
+```{r}
+K = function(x){(1-0.5*(x - 1)^2)}
+
+a = function(x,y,sigma = 1){exp(-1/(2*sigma)*(x-y)^2)}
+```
+
+Avec quelques calculs d'équilibre il viens: $$
+s(x,y) = r\cdot(1-a(x,y)\cdot\frac{K(y)}{K(x)})
+$$ C'est cette fonction que l'on appel fitness qui va décrire la stabilité des phénotype. Si $s(x,y)<0$ le mutant ne peut pas envahir, mais si $s(x,y)>0$ alors ce dernier peut subsisté.
+
+```{r}
+s = function(x,y) {1 - a(x,y) *(K(y) / K(x))}
+
+```
+
+Nous avons maintenant tous les outils pour étudier le comportement de ce modéle.
+
+On commence par crée un gradient de trait possible.
+
+```{r}
+X = seq(0.01,1.99,length.out = 100)
+```
+
+On peut représenté $K$ et $a$ pour chaque valeur de traits possible en fixant le trait de la population y sur certaine valeur.
+
+```{r}
+plot(a(X,1)~X, type = "l",xlab = "Traits" , ylab = "Ressource", lwd = 2)
+lines(a(X,0.75)~X)
+lines(a(X, 1.25)~X)
+lines(a(X,0.5)~X)
+lines(a(X,1.5)~X)
+lines(K(X)~X, col ="red", lwd = 2)
+
+legend("topright",legend = c("a","K"), col = c("black","red"), lwd = 2)
+```
+
+## Representation de la fitness
+
+Création de la fonction qui calcule chaque pour chaque valeurs de traits de x et y la fitness des deux phénotype. Un argument sigma est ajouté pour observé la variation de fitness pour différentes paramétres de la fonction d'inteesité de compétition.
+
+```{r}
+fitness.compute = function(X,sigma){
+  df = data.frame(x = rep(NA, length(X)**2),
+                  y = rep(NA, length(X)**2),
+                  s = rep(NA, length(X)**2))
+  n = 1
+  for (x in X){
+    for(y in X){
+      s =  1 - a(x,y,sigma) *(K(y) / K(x))
+      df[n,] = c(x, y, s)
+      n = n+1
+    }
+  }
+    
+ return(df)
+}
+```
+
+Calcule de la fitness pour différentes valeurs de $\sigma$
+
+```{r}
+
+sigmas = seq(0.2,1, length.out =9)
+fitness_output = data.frame(fitness.compute(X,sigmas[1]))
+fitness_output$sigma = sigmas[1]
+for (sig in sigmas[2:9]){
+  temp = data.frame(fitness.compute(X,sig))
+  temp$sigma = sig
+  fitness_output = rbind(fitness_output,temp)
+}
+fitness_output$category  <- ifelse(fitness_output$s >= 0, "Positive", "Negative")
+```
+
+### Pour different sigma
+
+```{r}
+ggplot(fitness_output)+
+  geom_raster(aes(x, y,  fill=category))+
+  facet_wrap(~sigma) +
+  scale_fill_manual(values = c("Negative" = "red", "Positive" = "blue"))+
+  main_theme
+```
+
+### En 3 dimentions
+
+```{r}
+#| include: false
+
+
+grid <- expand.grid(X, X)
+
+# Calculate the function values
+z <- with(grid, s(Var1, Var2))
+# Define the colors based on the sign of z
+colors <- ifelse(z  > 0, "blue", "red")
+colors
+# Create the 3D surface plot
+rgl.open()
+plot3d(grid$Var1, grid$Var2, z, col = colors, type = "p", size = 0.5,
+       xlab = "x", ylab = "y", zlab = "f(x, y)",
+       colkey = list(length = 0.5, width = 0.1))
+
+# Add a color legend
+legend3d("topright", legend = c("Positive", "Negative"),
+         pch = 15, col = c("blue", "red"))
+
+rglWidgetHTML <- rglwidget()
+
+# Close the rgl device
+rgl.close()
+
+
+# plot3d(s, xlim = c(0.01,1.99), ylim = c(0.01,1.99),col = colors, zlab="fit",xlab="x", ylab="y")
+# planes3d(a = 1, b = 1, c = 0, d = 1, alpha = 1)
+```
+
+```{r}
+rglWidgetHTML
+```
+
+# Cas d'un modéle a N phénotypes
+
+$$
+\frac{dn_i}{dt} = rn_i \left[1-\frac{\sum_ja(x_i,x_j)\cdot n_j}{K(xi)} \right]
+$$ On commence par crée une fonction $K.func = \frac{1}{K}$, cela permettra de simplifié les calcule matricielle par la suite.
+
+```{r}
+#| echo: false
+
+K.func = function(x, K0, lambda, x0){return(
+  max(10^(-6), 1/(K0-lambda*(x - x0)**2)))}
+
+```
+
+Le modèle à N espèces est décris par la fonction suivante :
+
+```{r}
+GLV = function(t, Ni, params){
+  with(as.list(params), {
+
+    
+    dNi = r*Ni*(1 - Ni%*%M)
+
+    return(list(dNi))
+  })
+}
+```
+
+## Parameters pour le GLV
+
+Pour 50 phénotype en compétition et avec $\sigma = 0.2$. On devrais obtenir un équilibre
+
+```{r}
+N = 200 # Nombre de phénotype
+X = seq(0.01, 1.999, length.out = N) # valeur des phénotypes
+N0 = rep(1/N, N) # densité des phénotypes a t0
+t =  seq(0,100000, length.out =10000)
+#simga = sample(seq(0.2,1, length.out = 1000), size = N, replace = T)
+  
+K = matrix(NA, nrow = length(X), ncol = length(X))
+A = matrix(NA, nrow = length(X), ncol = length(X))
+
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K[i,j] =  K.func(x = X[j], K0 = 1, lambda = 1, x0 = 1)
+    A[i,j] = a(X[i], X[j], sigma =0.2)
+  }
+}
+    
+M = A * K # matrice de compétition et d'abondance de ressources
+```
+
+Calcule de la dynamique
+
+```{r}
+params = list(r= 1, M = M) # paramétrés du modèle
+
+dyna_glv = ode(y = N0, times = t, func = GLV, params) # Dynamique
+
+dyna_glv = as.data.frame(dyna_glv)
+
+dyna_glv_long = dyna_glv%>%
+  pivot_longer(-time, values_to = "dens", names_to = "sp_ID")
+
+dyna_glv_long$trait = X[ as.numeric(dyna_glv_long$sp_ID)]
+
+ggplot(dyna_glv_long)+
+  geom_raster(aes(trait, time,  fill=dens))+
+  scale_fill_gradient2(low = "white" ,
+  high = "red")+
+  main_theme
+```
+
+Deux trait subsistent, c'est ce a quoi l'on attendait avec la valeur $\sigma = 0.2$. On peut réitérer pour une valeur plus grande, par exemple $\sigma = 1$
+
+```{r}
+K2 = matrix(NA, nrow = length(X), ncol = length(X))
+A2 = matrix(NA, nrow = length(X), ncol = length(X))
+
+for(i in 1:length(X)){
+  for(j in 1:length(X)){
+    K2[i,j] =  K.func(x = X[j], K0 = 1, lambda = 1, x0 = 1)
+    A2[i,j] = a(X[i], X[j], sigma =1)
+  }
+}
+    
+M2 = A2 * K2 # matrice de compétition et d'abondance de ressources
+
+params2 = list(r= 1, M = M2) # paramétrés du modèle
+
+dyna_glv2 = ode(y = N0, times = t, func = GLV, params2) # Dynamique
+
+dyna_glv2 = as.data.frame(dyna_glv2)
+
+dyna_glv_long2 = dyna_glv2%>%
+  pivot_longer(-time, values_to = "dens", names_to = "sp_ID")
+
+dyna_glv_long2$trait = X[ as.numeric(dyna_glv_long2$sp_ID)]
+
+ggplot(dyna_glv_long2)+
+  geom_raster(aes(trait, time,  fill=dens))+
+  scale_fill_gradient2(low = "white" ,
+  high = "red")+
+  main_theme
+```
+
+Cette fois-ci seulement 1 phénotype subsiste.
+
+### Mutation
+
+On ajoute maintenant la mutation. Pour cela on va considéré un temps évolutif, différent du temps de la dynamique. Ce temp évolutif est discret, une unité de temp évolutif correspond a une dynamique complété. On commence la simulation avec un seul phénotype. A chaque pas de temps évolutif une partie de la population du phénotype peut muté. Cella ce traduit par un transfert d'une la population vers une valeur de trait légèrement plus ou légèrement moins élever.A la fin de chaque dynamique on récupéré les valeurs abondance de l'ensemble des trait présent, ces valeur sont le récapitulatif de chaque pas de temp évolutif et sont aussi les valeurs initial de la dynamique du prochain temps évolutif.
+
+Fonction de dynamique adatpative avec mutation
+
+```{r}
+
+mutation.dyna.adapt = function(ini = 1, sigma){  
+  # Besoin réimporter les packages dans la fonction, si non la parallélisation ne les détecte pas dans la suite
+  library(deSolve)
+  library(tidyverse)
+        
+  # Inisialisation des paramétres 
+  N = 200
+  X = seq(0.01, 1.99, length.out = N)
+  N0 = rep(1/N, N)
+  t =  seq(0,500, length.out =500)
+  K = matrix(NA, nrow = length(X), ncol = length(X))
+  A = matrix(NA, nrow = length(X), ncol = length(X))
+  
+  T_evolutif = 250 #nbr de pas de temps évolutifs
+
+  ### 
+  for(i in 1:length(X)){
+    for(j in 1:length(X)){
+  
+      K[i,j] =  K.func(x = X[j], K0 = 2, lambda = 1, x0 = 1 )
+      A[i,j] = a(X[i], X[j], sigma = sigma)
+    }
+  }
+  M = A *K
+  
+  params = list(r= 1, M = M)
+  
+  ### état initial
+  N0 = rep(0, N)
+  if( ini == 1){
+    N0[1] = 1/N # Un phénotype à gauche
+  }else if(ini == 2){
+    N0[1] = 1/N # Un phénotype à gauche
+    N0[length(N0)] = 1/N # Un phénotype à droite
+  }
+    
+ 
+  
+# Initialisation des index max et min pour les valeurs traits ( utilisé pour ne pas arrêt la boucle lorsque un trait mute en dehors des valeurs de traits possibles )
+  last_out = rep(T, N)
+  fist_out = rep(T, N)
+  last_out[N] =F
+  fist_out[1] = F 
+  
+  # Initialisation de la matrice prenant les valeurs de traits possibles pour chaque temps evolutif
+  dyna_mutation = matrix(0, ncol = N, nrow = T_evolutif)
+  dyna_mutation[1,] = N0
+  T_evo = 1
+  for(T_evo in 1:(T_evolutif-1)){
+    dyna_glv = ode(y = dyna_mutation[T_evo,], times = t, func = GLV, params, method = "euler")
+    dyna_glv = dyna_glv[,2:(N+1)] #retrait de la colonne t
+    dyna_mutation[T_evo+1,] = dyna_glv[nrow(dyna_glv),] # stockage du dernier pas de temps
+    
+    pres = dyna_glv[nrow(dyna_glv),] !=0 #vérification de la présence ou non de chaque traits.
+    
+    # Une chance sur deux pour que la mutation augmente ou diminue la valeur du trait
+    if(rbinom(1,1,0.5)){
+      
+      # Mutation du trait vers la "droite"
+      mut = rbinom(N,1,0.5)
+      ID = which(mut & pres & last_out) # filtre permettant validé la mutation ou non suivant si la mutation effectivement eu lieu (mut), la présence du trait (pres), et de la possibilité de la mutation (last_out ou fist_out suivant si la mutation est à "droite" ou à "gauche" ) (les trait 0 et 1.99, ne peuvent pas muté à -0.01 ou 2)
+      
+      # Mutation de population de 5%
+      dyna_mutation[T_evo+1, ID] = dyna_mutation[T_evo+1, ID] -dyna_mutation[T_evo+1, ID] * 0.05
+      dyna_mutation[T_evo+1, ID+1] = dyna_mutation[T_evo+1, ID+1] +dyna_mutation[T_evo+1, ID] * 0.05
+    }else{
+      
+      # Mutation du trait vers la "gauche"
+      mut = rbinom(N,1,0.5)
+      ID = which(mut & pres & fist_out)
+      dyna_mutation[T_evo+1, ID] = dyna_mutation[T_evo+1, ID] -dyna_mutation[T_evo+1, ID] * 0.05
+      dyna_mutation[T_evo+1, ID-1] = dyna_mutation[T_evo+1, ID-1] + dyna_mutation[T_evo+1, ID] * 0.05
+    }
+    dyna_mutation = round(dyna_mutation,3)
+  }
+  # Mise en forme du tableaux pour affichage graphique avec ggplot
+  dyna_mutation = as.data.frame(dyna_mutation)
+  dyna_mutation$T_evolutif = 1:T_evolutif
+  colnames(dyna_mutation) = as.character(c(1:N, "T_evolutif"))
+  dyna_mutation_long = dyna_mutation%>%
+    pivot_longer(-T_evolutif, values_to = "dens", names_to = "sp_ID")
+  dyna_mutation_long$trait = X[ as.numeric(dyna_mutation_long$sp_ID)]
+  dyna_mutation_long$sigma = sigma 
+  
+  return(dyna_mutation_long)
+}
+```
+
+On lance les simulations pour différentes valeur de sigma, avec seulement 1 phénotype a l'état initial
+
+```{r}
+
+ncores =detectCores()
+print(ncores)
+registerDoParallel(cores=(ncores-1))
+
+dyna_mutation_long = foreach(sig = c(0.2,0.6,1),.combine = rbind, .verbose = T) %dopar%{mutation.dyna.adapt(sigma = sig)}
+
+# for(sig in seq(0.3,1,length.out = 8)){
+#   dyna_mutation_long = rbind(dyna_mutation_long,mutation.dyna.adapt(sig))
+# }
+```
+
+```{r}
+
+ggplot(dyna_mutation_long)+
+  geom_raster(aes(trait, T_evolutif,  fill=dens))+
+  facet_wrap(~sigma, labeller = labeller(sigma = c("sig",  label_value)))+
+  scale_fill_gradient2(low = "white" ,
+  high = "black")+
+  labs(x = "Temps evolitif", y = "Traits")+
+  theme_bw()+
+  theme(line = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        axis.ticks =  element_line(colour = "black"),
+        axis.text.x = element_text(colour = "black", size=22),
+        axis.text.y = element_text(colour = "black", size=22),
+        legend.title = element_text(colour = "black", size=20),
+        legend.title.align=0.5,
+        legend.text = element_text(colour = "black", size=18),
+        axis.title=element_text(size=28),
+        strip.background = element_rect(fill="white"))
+
+TeX(r'($\sigma = $)')
+```
+
+Simulations avec 2 phénotype à l'état initial pour 3 valeur de sigma
+
+```{r}
+dyna_mutation_long2 = foreach( sig = c(0.2,0.6,1),.combine = rbind, .verbose = T) %dopar%{mutation.dyna.adapt(ini = 2, sigma = sig)}
+```
+
+```{r}
+ggplot(dyna_mutation_long2)+
+  geom_raster(aes(trait, T_evolutif,  fill=dens))+
+  facet_wrap(~sigma)+
+  scale_fill_gradient2(low = "white" ,
+  high = "black")+
+  labs(x = "Temps evolitif", y = "Traits")+
+  theme_bw()+
+  theme(line = element_blank(), 
+        axis.line = element_line(colour = "black"),
+        
+        axis.ticks =  element_line(colour = "black"),
+        axis.text.x = element_text(colour = "black", size=22),
+        axis.text.y = element_text(colour = "black", size=22),
+        legend.title = element_text(colour = "black", size=20),
+        legend.title.align=0.5,
+        legend.text = element_text(colour = "black", size=18),
+        axis.title=element_text(size=28),
+        strip.background = element_rect(fill="white"))
+
+```

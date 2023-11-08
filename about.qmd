@@ -2,12 +2,4 @@
 title: "About"
 ---
 
-About this site
-
-```{r}
-
-1 + 1
-
-```
-
-test
+This is my github page : <https://github.com/GhMathis>.
