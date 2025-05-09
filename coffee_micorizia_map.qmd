@@ -46,6 +46,11 @@ convert_to_wgs84 <- function(zone, hemisphere, easting, northing,Sample_code) {
   coords <- st_coordinates(point_wgs84)
   tibble(lon = coords[1], lat = coords[2],Sample_code = Sample_code)
 }
+utm_coords %>%
+  mutate(zone = case_when(zone==32~ 36,
+                             .default = zone),
+          northing = case_when(Sample_code == "N17" ~ 86562,
+                             .default = northing)) -> utm_coords
 
 # Apply to each row
 wgs84_coords <- pmap_dfr(utm_coords[, c("zone", "hemisphere", "easting", "northing","Sample_code")], convert_to_wgs84) %>%

@@ -11,4 +11,4 @@ output:
 
 [Dynamique adaptative](dyna_adaptative.qmd)
 
-[Coffee Micorizia map](coffee_micorizia_map.qmd)
+[Map samples Uganda](coffee_micorizia_map.qmd)
