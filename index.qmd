@@ -7,8 +7,7 @@ output:
    css: style.css
 ---
 
+## Sommaire 
 
-##Sommaire
 [Dynamique adaptative](dyna_adaptative.qmd)
-
-
+[Coffee Micorizia map](coffee_micorizia_map.qmd)

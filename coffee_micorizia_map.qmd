@@ -1,0 +1,66 @@
+---
+title: "Coffee micorizia map"
+---
+```{r}
+#| warning: false
+#| message: false
+
+
+library(tidyverse)
+library(leaflet)
+library(mapview)
+library(sf)
+library(readxl)
+```
+
+```{r}
+#| echo: false
+metadata <- read_xlsx(path = "data/Metadata_Doreen_070525.xlsx")
+
+utm_coords <- metadata %>%
+  mutate(
+    zone = as.numeric(substr(gps_lat, 1, 2)),
+    lat = as.numeric(sub(".* ", "", gps_lat)),
+    lon = as.numeric(gps_lon)
+  )
+
+utm_coords <- utm_coords %>%
+  mutate(
+    zone = as.numeric(substr(gps_lat, 1, 2)),
+    band = substr(gps_lat, 3, 3),
+    easting = as.numeric(sub(".* ", "", gps_lat)),
+    northing = as.numeric(gps_lon),
+    hemisphere = ifelse(band >= "N", "north", "south") # M = Northern Hemisphere
+  )
+
+# Function to convert a single row to lat/lon
+convert_to_wgs84 <- function(zone, hemisphere, easting, northing,Sample_code) {
+  epsg <- if (hemisphere == "north") {
+    32600 + zone  # Northern hemisphere UTM EPSG codes
+  } else {
+    32700 + zone  # Southern hemisphere UTM EPSG codes
+  }
+
+  point <- st_sfc(st_point(c(easting, northing)), crs = epsg)
+  point_wgs84 <- st_transform(point, crs = 4326)
+  coords <- st_coordinates(point_wgs84)
+  tibble(lon = coords[1], lat = coords[2],Sample_code = Sample_code)
+}
+
+# Apply to each row
+wgs84_coords <- pmap_dfr(utm_coords[, c("zone", "hemisphere", "easting", "northing","Sample_code")], convert_to_wgs84) %>%
+  left_join(metadata %>%
+              dplyr::select(-c(gps_lat,gps_lon)), by = "Sample_code") %>%
+  st_as_sf(coords = c("lat", "lon"),crs = 4326) %>%
+  mutate(
+    lat = st_coordinates(.)[,1],
+    lon = st_coordinates(.)[,2]
+  )
+
+
+leaflet() %>% 
+  addTiles() %>%
+  addMarkers(data=wgs84_coords,~lon, ~lat, popup = ~Sample_code , label = ~Sample_code ) %>%
+  addCircleMarkers(data=wgs84_coords, lng = ~lon,
+                  lat = ~lat, radius = 8, color = "blue", fillOpacity = 0.8)
+```

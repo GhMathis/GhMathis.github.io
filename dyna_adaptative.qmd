@@ -32,7 +32,7 @@ main_theme = theme_bw()+
         strip.background = element_rect(fill="white"))
 ```
 
-# Introdution
+# Introduction
 
 Nous cherchons dans un premier temps à simuler l'évolution de 2 phénotypes en compétition. Puis dans un second temps, nous présenterons le même modèle, mais étendus à N phénotypes.
 
@@ -44,7 +44,7 @@ Chaque phénotype peut varier le long d'un gradient de trait possible. Chaque ph
 
 # Cas d'un modéle a 2 phénotypes
 
-On a le système suivant qui décrit la dynamique des deux phénotypes 
+On a le système suivant qui décrit la dynamique des deux phénotypes
 
 $$ 
 \begin{align}
@@ -52,7 +52,6 @@ $$
 \frac{dn_2}{dt} &= rn_1 \left(1-\frac{a(x_2,x_2)n_21+a(x_1,x_2)n_1}{K(x_2)} \right)\\
 \end{align}
 $$
-
 
 $$
 \begin{align}
@@ -63,7 +62,7 @@ $$
 
 avec $a$ et $K$ décrivant respectivement l'intensité de la compétition entre deux traits ($0<a(x,y)<1$ et la disponibilité de la ressource pour un trait donnée.
 
-Nous allons donc commencé par crée les fonction $a$ et $K$. Nous pour cette exemple les valeurs suivant : 
+Nous allons donc commencé par crée les fonction $a$ et $K$. Nous pour cette exemple les valeurs suivant :
 
 $$
 K_0 = 1 \ ; \ \lambda = 0.5 ; \ x_0 = 1 \\
@@ -76,11 +75,11 @@ K = function(x){(1-0.5*(x - 1)^2)}
 a = function(x,y,sigma = 1){exp(-1/(2*sigma)*(x-y)^2)}
 ```
 
-Avec quelques calculs d'équilibres il viens: 
+Avec quelques calculs d'équilibres il viens:
 
 $$
 s(x,y) = r\cdot \left(1-a(x,y)\cdot\frac{K(y)}{K(x)}\right)
-$$ 
+$$
 
 C'est cette fonction que l'on appel fitness qui va décrire la stabilité des phénotype. Si $s(x,y)<0$ le mutant ne peut pas envahir, mais si $s(x,y)>0$ alors ce dernier peu envahir.
 
@@ -89,8 +88,7 @@ s = function(x,y) {1 - a(x,y) *(K(y) / K(x))}
 
 ```
 
-Nous avons maintenant tous les outils pour étudier le comportement de ce modèle.
-On commence par créer un gradient de traits possible.
+Nous avons maintenant tous les outils pour étudier le comportement de ce modèle. On commence par créer un gradient de traits possible.
 
 ```{r}
 X = seq(0.01,1.99,length.out = 100)
@@ -417,7 +415,6 @@ dyna_mutation_long = foreach(sig = c(0.2,0.6,1),.combine = rbind, .verbose = T) 
 # }
 ```
 
-
 ```{r}
 
 ggplot(dyna_mutation_long)+
@@ -442,7 +439,6 @@ ggplot(dyna_mutation_long)+
 ```
 
 Pour des valeurs de $\sigma$ faible, plusieurs phénotype peuvent cohabité. Mais lorsque l'intensité de compétition augment, cette cohabitation devient impossible.
-
 
 Simulations avec 2 phénotype à l'état initial pour 3 valeur de sigma
 
